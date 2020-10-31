@@ -1,527 +1,500 @@
 <script>
-  import {
-    beforeUpdate,
-    createEventDispatcher,
-    onDestroy,
-    onMount,
-    tick
-  } from "svelte";
-  import List from "./List.svelte";
-  import ItemComponent from "./Item.svelte";
-  import SelectionComponent from "./Selection.svelte";
-  import MultiSelectionComponent from "./MultiSelection.svelte";
-  import isOutOfViewport from "./utils/isOutOfViewport";
-  import debounce from "./utils/debounce";
+  import { beforeUpdate, createEventDispatcher, onDestroy, onMount, tick } from 'svelte'
+  import List from './List.svelte'
+  import ItemComponent from './Item.svelte'
+  import SelectionComponent from './Selection.svelte'
+  import MultiSelectionComponent from './MultiSelection.svelte'
+  import isOutOfViewport from './utils/isOutOfViewport'
+  import debounce from './utils/debounce'
 
-  const dispatch = createEventDispatcher();
-  export let container = undefined;
-  export let input = undefined;
-  export let Item = ItemComponent;
-  export let Selection = SelectionComponent;
-  export let MultiSelection = MultiSelectionComponent;
-  export let isMulti = false;
-  export let isDisabled = false;
-  export let isCreatable = false;
-  export let isFocused = false;
-  export let selectedValue = undefined;
-  export let filterText = "";
-  export let placeholder = "Select...";
-  export let items = [];
-  export let itemFilter = (label, filterText, option) =>
-    label.toLowerCase().includes(filterText.toLowerCase());
-  export let groupBy = undefined;
-  export let groupFilter = groups => groups;
-  export let isGroupHeaderSelectable = false;
+  const dispatch = createEventDispatcher()
+  export let container = undefined
+  export let input = undefined
+  export let Item = ItemComponent
+  export let Selection = SelectionComponent
+  export let MultiSelection = MultiSelectionComponent
+  export let isMulti = false
+  export let isDisabled = false
+  export let isCreatable = false
+  export let isFocused = false
+  export let selectedValue = undefined
+  export let filterText = ''
+  export let placeholder = 'Select...'
+  export let items = []
+  export let itemFilter = (label, filterText, _) => label.toLowerCase().includes(filterText.toLowerCase())
+  export let groupBy = undefined
+  export let groupFilter = groups => groups
+  export let isGroupHeaderSelectable = false
   export let getGroupHeaderLabel = option => {
-    return option.label;
-  };
+    return option.label
+  }
   export let getOptionLabel = (option, filterText) => {
-    return option.isCreator ? `Create \"${filterText}\"` : option.label;
-  };
-  export let optionIdentifier = "value";
-  export let loadOptions = undefined;
-  export let hasError = false;
-  export let containerStyles = "";
+    return option.isCreator ? `Create \"${filterText}\"` : option.label
+  }
+  export let optionIdentifier = 'value'
+  export let loadOptions = undefined
+  export let hasError = false
+  export let containerStyles = ''
   export let getSelectionLabel = option => {
-    if (option) return option.label;
-  };
+    if (option) return option.label
+  }
 
   export let createGroupHeaderItem = groupValue => {
     return {
       value: groupValue,
       label: groupValue
-    };
-  };
+    }
+  }
 
   export let createItem = filterText => {
     return {
       value: filterText,
       label: filterText
-    };
-  };
-
-  export let isSearchable = true;
-  export let inputStyles = "";
-  export let isClearable = true;
-  export let isWaiting = false;
-  export let listPlacement = "auto";
-  export let listOpen = false;
-  export let list = undefined;
-  export let isVirtualList = false;
-  export let loadOptionsInterval = 300;
-  export let noOptionsMessage = "No options";
-  export let hideEmptyState = false;
-  export let filteredItems = [];
-  export let inputAttributes = {};
-  export let listAutoWidth = true;
-  export let itemHeight = 40;
-  export let Icon = undefined;
-  export let iconProps = {};
-  export let showChevron = false;
-  export let showIndicator = false;
-  export let containerClasses = "";
-  export let indicatorSvg = undefined;
-
-  let target;
-  let activeSelectedValue;
-  let _items = [];
-  let originalItemsClone;
-  let prev_selectedValue;
-  let prev_listOpen;
-  let prev_filterText;
-  let prev_isFocused;
-  let prev_filteredItems;
-
-  async function resetFilter() {
-    await tick();
-    filterText = "";
+    }
   }
 
-  let getItemsHasInvoked = false;
+  export let isSearchable = true
+  export let inputStyles = ''
+  export let isClearable = true
+  export let isWaiting = false
+  export let listPlacement = 'auto'
+  export let listOpen = false
+  export let list = undefined
+  export let isVirtualList = false
+  export let loadOptionsInterval = 300
+  export let noOptionsMessage = 'No options'
+  export let hideEmptyState = false
+  export let filteredItems = []
+  export let inputAttributes = {}
+  export let listAutoWidth = true
+  export let itemHeight = 40
+  export let parentContainer = undefined
+  export let Icon = undefined
+  export let iconProps = {}
+  export let showChevron = false
+  export let showIndicator = false
+  export let containerClasses = ''
+  export let indicatorSvg = undefined
+
+  let target
+  let overlay
+  let activeSelectedValue
+  let originalItemsClone
+  let prev_selectedValue
+  let prev_listOpen
+  let prev_filterText
+  let prev_isFocused
+  let prev_filteredItems
+
+  async function resetFilter() {
+    await tick()
+    filterText = ''
+  }
+
+  let getItemsHasInvoked = false
   const getItems = debounce(async () => {
-    getItemsHasInvoked = true;
-    isWaiting = true;
+    getItemsHasInvoked = true
+    isWaiting = true
 
     let res = await loadOptions(filterText).catch(err => {
-      console.warn('svelte-select loadOptions error :>> ', err);
-      dispatch("error", { type: 'loadOptions', details: err });
-    });
+      console.warn('svelte-select loadOptions error :>> ', err)
+      dispatch('error', { type: 'loadOptions', details: err })
+    })
 
-    if (res) { 
-      items = [...res];
+    if (res) {
+      items = [...res]
     } else {
-      items = [];
+      items = []
     }
 
-    isWaiting = false;
-    isFocused = true;
-    listOpen = true;
-  }, loadOptionsInterval);
-
-  $: disabled = isDisabled;
+    isWaiting = false
+    isFocused = true
+    listOpen = true
+  }, loadOptionsInterval)
 
   $: {
-    if (typeof selectedValue === "string") {
+    if (typeof selectedValue === 'string') {
       selectedValue = {
         [optionIdentifier]: selectedValue,
         label: selectedValue
-      };
+      }
     } else if (isMulti && Array.isArray(selectedValue) && selectedValue.length > 0) {
-      selectedValue = selectedValue.map(item => typeof item === "string" ? ({ value: item, label: item }) : item);
+      selectedValue = selectedValue.map(item => (typeof item === 'string' ? { value: item, label: item } : item))
+    }
+
+    if (selectedValue && items.length > 0 && !isMulti) {
+      const item = items.filter(i => i.value === selectedValue[optionIdentifier])[0]
+      selectedValue.label = item ? item.label : []
     }
   }
 
   $: {
-    if (noOptionsMessage && list) list.$set({ noOptionsMessage });
+    if (noOptionsMessage && list) list.$set({ noOptionsMessage })
   }
 
-  $: showSelectedItem = selectedValue && filterText.length === 0;
+  $: showSelectedItem = selectedValue && filterText.length === 0
 
-  $: placeholderText = selectedValue ? "" : placeholder;
+  $: placeholderText = selectedValue ? '' : placeholder
 
-  let _inputAttributes = {};
+  let _inputAttributes = {}
   $: {
     _inputAttributes = Object.assign(inputAttributes, {
-      autocomplete: "off",
-      autocorrect: "off",
+      autocomplete: 'off',
+      autocorrect: 'off',
       spellcheck: false
-    });
+    })
 
     if (!isSearchable) {
-      _inputAttributes.readonly = true;
+      _inputAttributes.readonly = true
     }
   }
 
   $: {
-    let _filteredItems;
-    let _items = items;
+    let _filteredItems
+    let _items = items
 
-    if (items && items.length > 0 && typeof items[0] !== "object") {
+    if (items && items.length > 0 && typeof items[0] !== 'object') {
       _items = items.map((item, index) => {
         return {
           index,
           value: item,
           label: item
-        };
-      });
+        }
+      })
     }
 
     if (loadOptions && filterText.length === 0 && originalItemsClone) {
-      _filteredItems = JSON.parse(originalItemsClone);
-      _items = JSON.parse(originalItemsClone);
+      _filteredItems = JSON.parse(originalItemsClone)
+      _items = JSON.parse(originalItemsClone)
     } else {
       _filteredItems = loadOptions
         ? filterText.length === 0
           ? []
           : _items
         : _items.filter(item => {
-            let keepItem = true;
+            let keepItem = true
 
             if (isMulti && selectedValue) {
               keepItem = !selectedValue.some(value => {
-                return value[optionIdentifier] === item[optionIdentifier];
-              });
+                return value[optionIdentifier] === item[optionIdentifier]
+              })
             }
 
-            if (!keepItem) return false;
-            if (filterText.length < 1) return true;
-            return itemFilter(
-              getOptionLabel(item, filterText),
-              filterText,
-              item
-            );
-          });
+            if (!keepItem) return false
+            if (filterText.length < 1) return true
+            return itemFilter(getOptionLabel(item, filterText), filterText, item)
+          })
     }
 
     if (groupBy) {
-      const groupValues = [];
-      const groups = {};
+      const groupValues = []
+      const groups = {}
 
       _filteredItems.forEach(item => {
-        const groupValue = groupBy(item);
+        const groupValue = groupBy(item)
 
         if (!groupValues.includes(groupValue)) {
-          groupValues.push(groupValue);
-          groups[groupValue] = [];
+          groupValues.push(groupValue)
+          groups[groupValue] = []
 
           if (groupValue) {
             groups[groupValue].push(
-              Object.assign(createGroupHeaderItem(groupValue, item), {
+              Object.assign(createGroupHeaderItem(groupValue), {
                 id: groupValue,
                 isGroupHeader: true,
                 isSelectable: isGroupHeaderSelectable
               })
-            );
+            )
           }
         }
 
-        groups[groupValue].push(
-          Object.assign({ isGroupItem: !!groupValue }, item)
-        );
-      });
+        groups[groupValue].push(Object.assign({ isGroupItem: !!groupValue }, item))
+      })
 
-      const sortedGroupedItems = [];
+      const sortedGroupedItems = []
 
       groupFilter(groupValues).forEach(groupValue => {
-        sortedGroupedItems.push(...groups[groupValue]);
-      });
+        sortedGroupedItems.push(...groups[groupValue])
+      })
 
-      filteredItems = sortedGroupedItems;
+      filteredItems = sortedGroupedItems
     } else {
-      filteredItems = _filteredItems;
+      filteredItems = _filteredItems
     }
   }
 
   beforeUpdate(() => {
     if (isMulti && selectedValue && selectedValue.length > 1) {
-      checkSelectedValueForDuplicates();
+      checkSelectedValueForDuplicates()
     }
 
     if (!isMulti && selectedValue && prev_selectedValue !== selectedValue) {
       if (
         !prev_selectedValue ||
-        JSON.stringify(selectedValue[optionIdentifier]) !==
-          JSON.stringify(prev_selectedValue[optionIdentifier])
+        JSON.stringify(selectedValue[optionIdentifier]) !== JSON.stringify(prev_selectedValue[optionIdentifier])
       ) {
-        dispatch("select", selectedValue);
+        dispatch('select', selectedValue)
       }
     }
 
-    if (
-      isMulti &&
-      JSON.stringify(selectedValue) !== JSON.stringify(prev_selectedValue)
-    ) {
+    if (isMulti && JSON.stringify(selectedValue) !== JSON.stringify(prev_selectedValue)) {
       if (checkSelectedValueForDuplicates()) {
-        dispatch("select", selectedValue);
+        dispatch('select', selectedValue)
       }
     }
 
     if (container && listOpen !== prev_listOpen) {
       if (listOpen) {
-        loadList();
+        loadList()
       } else {
-        removeList();
+        removeList()
       }
     }
 
     if (filterText !== prev_filterText) {
       if (filterText.length > 0) {
-        isFocused = true;
-        listOpen = true;
+        isFocused = true
+        listOpen = true
 
         if (loadOptions) {
-          getItems();
+          getItems()
         } else {
-          loadList();
-          listOpen = true;
+          loadList()
+          listOpen = true
 
           if (isMulti) {
-            activeSelectedValue = undefined;
+            activeSelectedValue = undefined
           }
         }
       } else {
-        setList([]);
+        setList([])
       }
 
       if (list) {
         list.$set({
           filterText
-        });
+        })
       }
     }
 
     if (isFocused !== prev_isFocused) {
       if (isFocused || listOpen) {
-        handleFocus();
+        handleFocus()
       } else {
-        resetFilter();
-        if (input) input.blur();
+        resetFilter()
+        if (input) input.blur()
       }
     }
 
     if (prev_filteredItems !== filteredItems) {
-      let _filteredItems = [...filteredItems];
+      let _filteredItems = [...filteredItems]
 
       if (isCreatable && filterText) {
-        const itemToCreate = createItem(filterText);
-        itemToCreate.isCreator = true;
+        const itemToCreate = createItem(filterText)
+        itemToCreate.isCreator = true
 
         const existingItemWithFilterValue = _filteredItems.find(item => {
-          return item[optionIdentifier] === itemToCreate[optionIdentifier];
-        });
+          return item[optionIdentifier] === itemToCreate[optionIdentifier]
+        })
 
-        let existingSelectionWithFilterValue;
+        let existingSelectionWithFilterValue
 
         if (selectedValue) {
           if (isMulti) {
             existingSelectionWithFilterValue = selectedValue.find(selection => {
-              return (
-                selection[optionIdentifier] === itemToCreate[optionIdentifier]
-              );
-            });
-          } else if (
-            selectedValue[optionIdentifier] === itemToCreate[optionIdentifier]
-          ) {
-            existingSelectionWithFilterValue = selectedValue;
+              return selection[optionIdentifier] === itemToCreate[optionIdentifier]
+            })
+          } else if (selectedValue[optionIdentifier] === itemToCreate[optionIdentifier]) {
+            existingSelectionWithFilterValue = selectedValue
           }
         }
 
         if (!existingItemWithFilterValue && !existingSelectionWithFilterValue) {
-          _filteredItems = [..._filteredItems, itemToCreate];
+          _filteredItems = [..._filteredItems, itemToCreate]
         }
       }
 
-      setList(_filteredItems);
+      setList(_filteredItems)
     }
 
-    prev_selectedValue = selectedValue;
-    prev_listOpen = listOpen;
-    prev_filterText = filterText;
-    prev_isFocused = isFocused;
-    prev_filteredItems = filteredItems;
-  });
+    prev_selectedValue = selectedValue
+    prev_listOpen = listOpen
+    prev_filterText = filterText
+    prev_isFocused = isFocused
+    prev_filteredItems = filteredItems
+  })
 
   function checkSelectedValueForDuplicates() {
-    let noDuplicates = true;
+    let noDuplicates = true
     if (selectedValue) {
-      const ids = [];
-      const uniqueValues = [];
+      const ids = []
+      const uniqueValues = []
 
       selectedValue.forEach(val => {
         if (!ids.includes(val[optionIdentifier])) {
-          ids.push(val[optionIdentifier]);
-          uniqueValues.push(val);
+          ids.push(val[optionIdentifier])
+          uniqueValues.push(val)
         } else {
-          noDuplicates = false;
+          noDuplicates = false
         }
-      });
+      })
 
-      if (!noDuplicates)
-        selectedValue = uniqueValues;
+      if (!noDuplicates) selectedValue = uniqueValues
     }
-    return noDuplicates;
+    return noDuplicates
   }
 
   async function setList(items) {
-    await tick();
-    if (list) return list.$set({ items });
-    if (loadOptions && getItemsHasInvoked && items.length > 0) loadList();
+    await tick()
+    if (list) return list.$set({ items })
+    if (loadOptions && getItemsHasInvoked && items.length > 0) loadList()
   }
 
   function handleMultiItemClear(event) {
-    const { detail } = event;
-    const itemToRemove =
-      selectedValue[detail ? detail.i : selectedValue.length - 1];
+    const { detail } = event
+    const itemToRemove = selectedValue[detail ? detail.i : selectedValue.length - 1]
 
     if (selectedValue.length === 1) {
-      selectedValue = undefined;
+      selectedValue = undefined
     } else {
       selectedValue = selectedValue.filter(item => {
-        return item !== itemToRemove;
-      });
+        return item !== itemToRemove
+      })
     }
 
-    dispatch("clear", itemToRemove);
+    dispatch('clear', itemToRemove)
 
-    getPosition();
+    getPosition()
   }
 
   async function getPosition() {
-    await tick();
-    if (!target || !container) return;
-    const { top, height, width } = container.getBoundingClientRect();
+    await tick()
 
-    target.style["min-width"] = `${width}px`;
-    target.style.width = `${listAutoWidth ? "auto" : "100%"}`;
-    target.style.left = "0";
+    if (!target || !container) return
 
-    if (listPlacement === "top") {
-      target.style.bottom = `${height + 5}px`;
+    const gap = 3
+    const { top, left, height, width } = container.getBoundingClientRect()
+
+    target.style['left'] = parentContainer ? `calc(${left}px + 1.5px)` : '0'
+    target.style['min-width'] = `${width}px`
+    target.style['width'] = listAutoWidth ? 'auto' : `${width}px`
+
+    if (listPlacement === 'top') {
+      target.style.bottom = parentContainer ? `calc(100% - ${top - gap}px)` : `${height + gap}px`
     } else {
-      target.style.top = `${height + 5}px`;
+      target.style.top = parentContainer ? `${top + height + gap}px` : `${height + gap}px`
     }
 
-    target = target;
+    target = target
 
-    if (listPlacement === "auto" && isOutOfViewport(target).bottom) {
-      target.style.top = ``;
-      target.style.bottom = `${height + 5}px`;
+    if (listPlacement === 'auto' && isOutOfViewport(target).bottom) {
+      target.style.top = ``
+      target.style.bottom = parentContainer ? `calc(100% - ${top - gap}px)` : `${height + gap}px`
     }
 
-    target.style.visibility = "";
+    target.style.visibility = ''
   }
 
   function handleKeyDown(e) {
-    if (!isFocused) return;
+    if (!isFocused) return
 
     switch (e.key) {
-      case "ArrowDown":
-        e.preventDefault();
-        listOpen = true;
-        activeSelectedValue = undefined;
-        break;
-      case "ArrowUp":
-        e.preventDefault();
-        listOpen = true;
-        activeSelectedValue = undefined;
-        break;
-      case "Tab":
-        if (!listOpen) isFocused = false;
-        break;
-      case "Backspace":
-        if (!isMulti || filterText.length > 0) return;
+      case 'ArrowDown':
+        e.preventDefault()
+        listOpen = true
+        activeSelectedValue = undefined
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        listOpen = true
+        activeSelectedValue = undefined
+        break
+      case 'Tab':
+        if (!listOpen) isFocused = false
+        break
+      case 'Backspace':
+        if (!isMulti || filterText.length > 0) return
         if (isMulti && selectedValue && selectedValue.length > 0) {
-          handleMultiItemClear(
-            activeSelectedValue !== undefined
-              ? activeSelectedValue
-              : selectedValue.length - 1
-          );
-          if (activeSelectedValue === 0 || activeSelectedValue === undefined)
-            break;
-          activeSelectedValue =
-            selectedValue.length > activeSelectedValue
-              ? activeSelectedValue - 1
-              : undefined;
+          handleMultiItemClear(activeSelectedValue !== undefined ? activeSelectedValue : selectedValue.length - 1)
+          if (activeSelectedValue === 0 || activeSelectedValue === undefined) break
+          activeSelectedValue = selectedValue.length > activeSelectedValue ? activeSelectedValue - 1 : undefined
         }
-        break;
-      case "ArrowLeft":
-        if (list) list.$set({ hoverItemIndex: -1 });
-        if (!isMulti || filterText.length > 0) return;
+        break
+      case 'ArrowLeft':
+        if (list) list.$set({ hoverItemIndex: -1 })
+        if (!isMulti || filterText.length > 0) return
 
         if (activeSelectedValue === undefined) {
-          activeSelectedValue = selectedValue.length - 1;
-        } else if (
-          selectedValue.length > activeSelectedValue &&
-          activeSelectedValue !== 0
-        ) {
-          activeSelectedValue -= 1;
+          activeSelectedValue = selectedValue.length - 1
+        } else if (selectedValue.length > activeSelectedValue && activeSelectedValue !== 0) {
+          activeSelectedValue -= 1
         }
-        break;
-      case "ArrowRight":
-        if (list) list.$set({ hoverItemIndex: -1 });
-        if (
-          !isMulti ||
-          filterText.length > 0 ||
-          activeSelectedValue === undefined
-        )
-          return;
+        break
+      case 'ArrowRight':
+        if (list) list.$set({ hoverItemIndex: -1 })
+        if (!isMulti || filterText.length > 0 || activeSelectedValue === undefined) return
         if (activeSelectedValue === selectedValue.length - 1) {
-          activeSelectedValue = undefined;
+          activeSelectedValue = undefined
         } else if (activeSelectedValue < selectedValue.length - 1) {
-          activeSelectedValue += 1;
+          activeSelectedValue += 1
         }
-        break;
+        break
     }
   }
 
   function handleFocus() {
-    isFocused = true;
-    if (input) input.focus();
+    isFocused = true
+    if (input) input.focus()
   }
 
   function removeList() {
-    resetFilter();
-    activeSelectedValue = undefined;
+    resetFilter()
+    activeSelectedValue = undefined
 
-    if (!list) return;
-    list.$destroy();
-    list = undefined;
+    if (!list) return
+    list.$destroy()
+    list = undefined
 
-    if (!target) return;
-    if (target.parentNode) target.parentNode.removeChild(target);
-    target = undefined;
+    const destination = overlay || target
+    if (!destination) return
 
-    list = list;
-    target = target;
+    if (destination.parentNode) destination.parentNode.removeChild(destination)
+
+    target = undefined
+    overlay = undefined
+
+    ;(list = list), (target = target), (overlay = overlay)
   }
 
   function handleWindowClick(event) {
-    if (!container) return;
-    const eventTarget =
-      event.path && event.path.length > 0 ? event.path[0] : event.target;
-    if (container.contains(eventTarget)) return;
-    isFocused = false;
-    listOpen = false;
-    activeSelectedValue = undefined;
-    if (input) input.blur();
+    if (!container) return
+
+    const eventTarget = event.path && event.path.length > 0 ? event.path[0] : event.target
+    if (container.contains(eventTarget)) return
+
+    isFocused = false
+    listOpen = false
+    activeSelectedValue = undefined
+    if (input) input.blur()
   }
 
   function handleClick() {
-    if (isDisabled) return;
-    isFocused = true;
-    listOpen = !listOpen;
+    if (isDisabled) return
+    isFocused = true
+    listOpen = !listOpen
   }
 
   export function handleClear() {
-    selectedValue = undefined;
-    listOpen = false;
-    dispatch("clear", selectedValue);
-    handleFocus();
+    selectedValue = undefined
+    listOpen = false
+    dispatch('clear', selectedValue)
+    handleFocus()
   }
 
   async function loadList() {
-    await tick();
-    if (target && list) return;
+    await tick()
+
+    if (target && list) return
 
     const data = {
       Item,
@@ -535,89 +508,108 @@
       getGroupHeaderLabel,
       items: filteredItems,
       itemHeight
-    };
-
-    if (getOptionLabel) {
-      data.getOptionLabel = getOptionLabel;
     }
 
-    target = document.createElement("div");
+    if (getOptionLabel) {
+      data.getOptionLabel = getOptionLabel
+    }
+
+    target = document.createElement('div')
 
     Object.assign(target.style, {
-      position: "absolute",
-      "z-index": 2,
-      visibility: "hidden"
-    });
+      position: 'absolute',
+      'z-index': 2,
+      visibility: 'hidden'
+    })
 
-    list = list;
-    target = target;
-    if (container) container.appendChild(target);
+    let wrapper = target
 
-    list = new List({
-      target,
-      props: data
-    });
+    if (parentContainer) {
+      overlay = document.createElement('div')
 
-    list.$on("itemSelected", event => {
-      const { detail } = event;
+      Object.assign(overlay.style, {
+        position: 'absolute',
+        'z-index': 1000,
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        overflow: 'hidden'
+      })
+
+      overlay.appendChild(target)
+      wrapper = overlay
+    }
+
+    list = list
+    wrapper = wrapper
+
+    const destination = parentContainer || container
+    if (destination) destination.appendChild(wrapper)
+
+    list = new List({ target, props: data })
+
+    list.$on('itemSelected', event => {
+      const { detail } = event
 
       if (detail) {
-        const item = Object.assign({}, detail);
+        const item = Object.assign({}, detail)
 
         if (!item.isGroupHeader || item.isSelectable) {
-
           if (isMulti) {
-            selectedValue = selectedValue ? selectedValue.concat([item]) : [item];
+            selectedValue = selectedValue ? selectedValue.concat([item]) : [item]
           } else {
-            selectedValue = item;
+            selectedValue = item
           }
 
-          resetFilter();
-          selectedValue = selectedValue;
+          resetFilter()
+          selectedValue = selectedValue
 
           setTimeout(() => {
-            listOpen = false;
-            activeSelectedValue = undefined;
-          });
+            listOpen = false
+            activeSelectedValue = undefined
+          })
         }
       }
-    });
+    })
 
-    list.$on("itemCreated", event => {
-      const { detail } = event;
+    list.$on('itemCreated', event => {
+      const { detail } = event
       if (isMulti) {
-        selectedValue = selectedValue || [];
-        selectedValue = [...selectedValue, createItem(detail)];
+        selectedValue = selectedValue || []
+        selectedValue = [...selectedValue, createItem(detail)]
       } else {
-        selectedValue = createItem(detail);
+        selectedValue = createItem(detail)
       }
 
-      filterText = "";
-      listOpen = false;
-      activeSelectedValue = undefined;
-      resetFilter();
-    });
+      filterText = ''
+      listOpen = false
+      activeSelectedValue = undefined
+      resetFilter()
+    })
 
-    list.$on("closeList", () => {
-      listOpen = false;
-    });
+    list.$on('closeList', () => {
+      listOpen = false
+    })
 
-    (list = list), (target = target);
-    getPosition();
+    list = list
+    wrapper = wrapper
+
+    getPosition()
   }
 
   onMount(() => {
-    if (isFocused) input.focus();
-    if (listOpen) loadList();
+    if (isFocused) input.focus()
+    if (listOpen) loadList()
 
     if (items && items.length > 0) {
-      originalItemsClone = JSON.stringify(items);
+      originalItemsClone = JSON.stringify(items)
     }
-  });
+  })
 
   onDestroy(() => {
-    removeList();
-  });
+    removeList()
+  })
 </script>
 
 <style>
@@ -742,7 +734,6 @@
     left: 0;
     right: 0;
     margin: auto;
-    -webkit-transform: none;
   }
 
   .spinner_path {
@@ -780,10 +771,7 @@
   }
 </style>
 
-<svelte:window
-  on:click={handleWindowClick}
-  on:keydown={handleKeyDown}
-  on:resize={getPosition} />
+<svelte:window on:click={handleWindowClick} on:keydown={handleKeyDown} on:resize={getPosition} />
 
 <div
   class="selectContainer {containerClasses}"
@@ -794,7 +782,6 @@
   style={containerStyles}
   on:click={handleClick}
   bind:this={container}>
-
   {#if Icon}
     <svelte:component this={Icon} {...iconProps} />
   {/if}
@@ -831,21 +818,13 @@
 
   {#if !isMulti && showSelectedItem}
     <div class="selectedItem" on:focus={handleFocus}>
-      <svelte:component
-        this={Selection}
-        item={selectedValue}
-        {getSelectionLabel} />
+      <svelte:component this={Selection} item={selectedValue} {getSelectionLabel} />
     </div>
   {/if}
 
   {#if showSelectedItem && isClearable && !isDisabled && !isWaiting}
     <div class="clearSelect" on:click|preventDefault={handleClear}>
-      <svg
-        width="100%"
-        height="100%"
-        viewBox="-2 -2 50 50"
-        focusable="false"
-        role="presentation">
+      <svg width="100%" height="100%" viewBox="-2 -2 50 50" focusable="false" role="presentation">
         <path
           fill="currentColor"
           d="M34.923,37.251L24,26.328L13.077,37.251L9.436,33.61l10.923-10.923L9.436,11.765l3.641-3.641L24,19.047L34.923,8.124
@@ -854,16 +833,12 @@
     </div>
   {/if}
 
-  {#if showIndicator || (showChevron && !selectedValue || (!isSearchable && !isDisabled && !isWaiting && ((showSelectedItem && !isClearable) || !showSelectedItem)))}
+  {#if showIndicator || (showChevron && !selectedValue) || (!isSearchable && !isDisabled && !isWaiting && ((showSelectedItem && !isClearable) || !showSelectedItem))}
     <div class="indicator">
       {#if indicatorSvg}
         {@html indicatorSvg}
       {:else}
-        <svg
-          width="100%"
-          height="100%"
-          viewBox="0 0 20 20"
-          focusable="false">
+        <svg width="100%" height="100%" viewBox="0 0 20 20" focusable="false">
           <path
             d="M4.516 7.548c0.436-0.446 1.043-0.481 1.576 0l3.908 3.747
             3.908-3.747c0.533-0.481 1.141-0.446 1.574 0 0.436 0.445 0.408 1.197 0
